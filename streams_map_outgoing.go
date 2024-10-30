@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"github.com/quic-go/quic-go/internal/utils"
 	"sync"
 
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -31,6 +32,8 @@ type outgoingStreamsMap[T outgoingStream] struct {
 	queueStreamIDBlocked func(*wire.StreamsBlockedFrame)
 
 	closeErr error
+
+	log utils.Logger
 }
 
 func newOutgoingStreamsMap[T outgoingStream](
@@ -46,6 +49,7 @@ func newOutgoingStreamsMap[T outgoingStream](
 		nextStream:           1,
 		newStream:            newStream,
 		queueStreamIDBlocked: func(f *wire.StreamsBlockedFrame) { queueControlFrame(f) },
+		log:                  utils.DefaultLogger.WithPrefix("outgoing_streams"),
 	}
 }
 
@@ -90,6 +94,7 @@ func (m *outgoingStreamsMap[T]) OpenStreamSync(ctx context.Context) (T, error) {
 	m.openQueue[queuePos] = waitChan
 	m.maybeSendBlockedFrame()
 
+	m.log.Infof("reached max stream %d, active streams %d", m.maxStream, len(m.streams))
 	for {
 		m.mutex.Unlock()
 		select {
@@ -182,6 +187,7 @@ func (m *outgoingStreamsMap[T]) SetMaxStream(num protocol.StreamNum) {
 		m.maybeSendBlockedFrame()
 	}
 	m.unblockOpenSync()
+	m.log.Infof("set max stream to %d", m.maxStream)
 }
 
 // UpdateSendWindow is called when the peer's transport parameters are received.
