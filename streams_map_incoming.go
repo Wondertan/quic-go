@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"github.com/quic-go/quic-go/internal/utils"
 	"sync"
 
 	"github.com/quic-go/quic-go/internal/protocol"
@@ -35,6 +36,8 @@ type incomingStreamsMap[T incomingStream] struct {
 	queueMaxStreamID func(*wire.MaxStreamsFrame)
 
 	closeErr error
+
+	log utils.Logger
 }
 
 func newIncomingStreamsMap[T incomingStream](
@@ -53,6 +56,7 @@ func newIncomingStreamsMap[T incomingStream](
 		nextStreamToOpen:   1,
 		nextStreamToAccept: 1,
 		queueMaxStreamID:   func(f *wire.MaxStreamsFrame) { queueControlFrame(f) },
+		log:                utils.DefaultLogger.WithPrefix("incoming_streams"),
 	}
 }
 
@@ -142,6 +146,9 @@ func (m *incomingStreamsMap[T]) DeleteStream(num protocol.StreamNum) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
+	if len(m.streams) >= int(m.maxNumStreams-10) {
+		m.log.Infof("delete stream %d, active streams %d", num, len(m.streams))
+	}
 	return m.deleteStream(num)
 }
 
@@ -179,6 +186,10 @@ func (m *incomingStreamsMap[T]) deleteStream(num protocol.StreamNum) error {
 				Type:         m.streamType,
 				MaxStreamNum: m.maxStream,
 			})
+
+			if len(m.streams) >= int(m.maxNumStreams-10) {
+				m.log.Infof("sent MAX_STREAM_ID %d, active streams %d", m.maxStream, len(m.streams))
+			}
 		}
 	}
 	return nil
